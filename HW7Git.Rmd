@@ -1,0 +1,213 @@
+---
+title: "HW7_S24_Pops_Adrianna"
+author: "Adrianna Pops"
+date: "2024-02-20"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 The Boston Housing Dataset
+
+The Boston Housing Dataset is derived from information collected by the U.S. Census Service
+concerning housing in the area of Boston MA. The following describes the dataset columns
+
++ CRIM - per capita crime rate by town
+
++ ZN - proportion of residential land zoned for lots over 25,000 sq.ft.
+
++ INDUS - proportion of non-retail business acres per town.
+
++ CHAS - Charles River dummy variable (1 if tract bounds river; 0 otherwise)
+
++ NOX - nitric oxides concentration (parts per 10 million)
+
++ RM - average number of rooms per dwelling
+
++ AGE - proportion of owner-occupied units built prior to 1940
+
++ DIS - weighted distances to five Boston employment centers
+
++ RAD - index of accessibility to radial highways
+
++ TAX - full-value property-tax rate per $10,000
+
++ PTRATIO - pupil-teacher ratio by town
+
++ BLACK - 1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
+
++ LSTAT - % lower status of the population
+
++ MEDV - Median value of owner-occupied homes in $1000's
+
+**(10 pts) The objective is to predict the median value of owner-occupied homes. Identify
+response variable based on the objective of the study. Run an exploratory data analysis
+(EDA) to identify the relationship between the response variable and potential
+predictors.**
+
+Since we're looking to predict median value that will be our response variable. 
+I'm going to measure most of the predictors against median value below. We can
+find a relationship easily with the corrplot package.
+
+```{r eda}
+suppressPackageStartupMessages("tidyverse")
+suppressPackageStartupMessages("glmnet")
+library(tidyverse)
+library(glmnet)
+library(corrplot)
+library(rsample)
+library(ggplot2)
+
+boston <- read.csv("/Users/ampops/Desktop/Boston.csv")
+head(boston)
+summary(boston)
+
+# plotting one variable against multiple variables for univariate and bivariate 
+# analysis using facet_wrap is quicker and more efficient than grid.arrange
+
+# boxplots of predictor variables and response variable medv
+boston %>%
+  gather(-medv, key = "var", value = "value") %>% # dropping variable of interest
+  ggplot(aes(x = ' ', y = value)) + # plotting individual variables against their values
+  geom_boxplot() + # as a boxplot
+  facet_wrap(~ var, scales = "free") + # from all keys and into separate panels
+  theme_bw() # black and white theme
+
+# histograms of predictor variables and response variable medv
+boston %>%
+  gather(-medv, key = "var", value = "value") %>% # dropping our variable of interest
+  ggplot(aes(x = value)) + # plot the values of each column
+  geom_histogram() + # in a histogram
+  facet_wrap(~ var, scales = "free") + # from all keys and into separate panels
+  theme_bw() # same theme
+class(boston)
+# find a relationship between response and predictor variables using color
+bcor = cor(boston)
+# circles varying in color to depict +/- correlation
+corrplot(bcor, method = 'circle')
+
+boston %>% # from the dataset
+  gather(-medv, key = "var", value = "value") %>% # gather and convert to key value pairs medv
+  ggplot(aes(x = value, y = medv)) + # plot the medv key value pairs
+    geom_point() + # as a scatter plot
+    stat_smooth(method = "lm", se = TRUE, col = "blue") + # with a linear regression trendline
+    facet_wrap(~ var,  scales = "free") + # each in their own panel and not equal
+    theme_bw() + # using a black and white theme
+    ggtitle("Predictor Variables vs Response Variable medv") 
+
+# source : Dr. Simon J Blog: https://drsimonj.svbtle.com/quick-plot-of-all-variables
+```
+
+# 2
+
+**(10) Using the least absolute shrinkage and selection operator (LASSO) identify an
+appropriate predictive model for the response variable. Write the steps including the
+selection of the tuning parameter $\gamma$ for the LASSO for the Boston Housing data set.
+Check if model assumptions are valid by running diagnostics on your final model. Write
+the predicted model for the response variable with estimated model parameters.**
+
+```{r lasso}
+# variable selection with lasso
+
+#split boston data 2/3 using response variable medv
+splt <- initial_split(boston, prop = 0.66, strata = "medv")
+
+# use training and test data below to run a lasso
+train.dat <- training(splt) # create a training data set
+test.dat <- testing(splt) # testing data set gives indexes
+x_train <- model.matrix(medv~., train.dat)[, -1] # model matrix for x, -column 1
+y_train <- train.dat$medv # model matrix for y
+
+x_test <- model.matrix(medv~., test.dat)[, -1] # repeat the process for test data
+y_test <- test.dat$medv # repeat the process for test data
+
+# run several times set.seed to create reproducible results
+set.seed(123)
+
+# cross validation to get sequence of lambda values
+cv.lam <- cv.glmnet(x = x_train, y = y_train, family = "gaussian", alpha = 1)
+best.lam <- cv.lam$lambda.min 
+# from all lambda choose small lam val where cv is small, small prediction error
+# with the best lambda run the lasso again
+# min lam best value for tuning parameter for cv error
+
+x <- model.matrix(medv~., boston)[, -1]
+y <- boston$medv
+
+# shows which coefficients were shrunk to 0
+# "s" specifies the tuning parameter
+glm_lasso <- glmnet(x, y, family = "gaussian", alpha = 1)
+plot(glm_lasso)
+
+glm_lasso_coef <- predict(glm_lasso, type = "coefficients", s = best.lam)
+
+glm_lasso_coef
+plot(glm_lasso_coef)
+```
+
+# 3
+
+**(10 pts) Is there any evidence of interaction between a categorical predictor and a
+quantitative predictor from the EDA? If yes, run an ANCOVA for the response including
+the interaction term in the final model from step 2. Check if model assumptions are
+valid by running diagnostics on your model. Write the predicted model for the response
+variable with estimated model parameters.**
+
+There was a small relationship between chas and medv. 
+
+```{r ancova}
+# modelling
+glm1 <- glm(medv ~ ., data = boston, family = "gaussian")
+summary(glm1) # age, indus, and X are the only values not to be considered
+car::vif(glm1)
+
+par(mfrow = c(2, 2)) # mapping plots in a 2 x 2
+plot(glm1)
+
+glm2 <- glm(medv ~ crim + zn + chas + nox + rm + dis + 
+              rad + tax + ptratio + black + lstat, data = boston, family = "gaussian")
+summary(glm2)
+par(mfrow = c(2, 2))
+plot(glm2)
+
+glm3 <- glm(medv ~ nox + rm + dis + rad + ptratio + lstat, data = boston, 
+            family = "gaussian")
+summary(glm3)
+par(mfrow = c(2, 2))
+plot(glm3)
+
+glm4 <- glm(medv ~ nox + rm + dis + ptratio + lstat, data = boston, 
+            family = "gaussian")
+summary(glm4)
+par(mfrow = c(2, 2))
+plot(glm4)
+
+anova(glm4, glm3, glm2, glm1) # i will use the smaller model since dev doesn't differ greatly
+
+bosanova <- select(boston, medv, chas)
+glm_bosanova<- glm(medv ~ chas, data = bosanova, family = "gaussian")
+summary(glm_bosanova)
+
+# run an ancova
+glm_bosancova<- glm(medv ~ chas, data = bosanova, family = "gaussian")
+summary(glm_bosancova)
+
+anova(glm_bosancova)
+```
+
+# 4
+
+**(5 pts) Interpret results you obtain from the models in 2) and 3).**
+
+Based on the residuals plot I think they are all fairly similar except for the 
+Q-Q plot. As I narrowed down my models I noticed the the points were following
+the line marginally closer. My best Q - Q plot is in GLM Model 4, which I consider
+to be my final model. There were no specific patterns in my Residuals vs Fitted
+or in my Scale vs. Location plots. My Residuals vs. Leverage plots changed as I
+made my way down the models. Model 1 shows it following the dotted line in middle, 
+however the red line transforms and follows a positive rise.
