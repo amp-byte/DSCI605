@@ -1,0 +1,198 @@
+---
+title: "HW9_Pops_Adrianna_MATH627"
+author: "Adrianna Pops"
+date: "2024-04-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## HW9 Polytomous Data -- Nominal and Ordinal Regression Models
+```{r packages}
+library(haven)
+library(VGAM)
+library(tidyverse)
+```
+
+
+```{r load}
+# load in data
+gss22 <- readRDS("/Users/ampops/Desktop/gss_22.rds")
+head(gss22)
+
+table(gss22$polviews)
+table(gss22$natenvir)
+table(gss22$natheal)
+table(gss22$natcrime)
+table(gss22$natdrug)
+```
+
+Assume that it is of interest to learn if respondents’ thinking whether we are spending too much money on it, too little money, or about the right amount on the followings are associated with their political views.
+
++ NATENVIR: Improving and protecting the environment
+
++ NATHEAL: Improving and protecting the nation’s health
+
++ NATCRIME: Halting the rising crime rate
+
++ NATDRUG: Dealing with drug addiction
+
+**Identify the response variable and the explanatory (or predictor) variables.**
+
+The explanatory variable: the respondents political standpoint 
+the response variables: too much, just enough, or not enough money is being spent in the following categories:
+
++ NATENVIR
+
++ NATHEAL
+
++ NATCRIME
+
++ NATDRUG
+
+**What is the distribution of the response variable?**
+
+The response variables could use a multinomial distribution.
+
+**What is the measurement scale of the response variable?**
+
+The measurement scale of the response variable is ordinal.
+
+**Identify the correct model that sheds light on the association between the response variable and the explanatory variables.**
+
+The question could be modelled using an ordinal logistic regression model I am
+analyzing views on spending in relation to political views. 
+
+**State the model and clearly identify all the part including the variables and parameters.**
+
+Too little, just enough, too much, for 4 nat variables measured against polviews
+
+$$
+log\frac{P(Y \le 1)}{P(Y \gt 1)} = -1.43389 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+$$
+log\frac{P(Y \le 2)}{P(Y \gt 2)} = 0.13696 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+$$
+log\frac{P(Y \le 3)}{P(Y \gt 3)} = 0.84760 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+$$
+log\frac{P(Y \le 4)}{P(Y \gt 4)} = 2.68133 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+$$
+log\frac{P(Y \le 5)}{P(Y \gt 5)} = 3.51357 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+$$
+log\frac{P(Y \le 6)}{P(Y \gt 6)} = 5.41155 - 1.09027x_1 - 0.52312x_2 + 0.56887x_3 - 0.17209x_4
+$$
+
+**Fit the model using data from GSS survey.**
+
+```{r models}
+model <- vglm(polviews ~ natenvir + natheal + natcrime + natdrug, family = cumulative(parallel=TRUE), data = gss22)
+summary(model)
+
+coef(model)
+```
+
+**Does respondent’s views on improving and protecting the environment have any impact on their political views?**
+
+Yes, improving and protecting the environment has an impact on respondent's political views. There is a strong interaction between them.
+
+**Does respondent’s views on halting the rising crime rate have any impact on their political views?**
+
+Yes, reducing and halting the rising crime rate has an impact on respondent's political views. There is a strong interaction between them.
+
+**Does respondent’s views on dealing with drug addiction have any impact on their political views?**
+
+There is not a strong interaction between respondents political views and dealing with drug addiction.
+
+**Which group of the respondents is most likely to have extremely liberal political views?**
+
+```{r 10}
+table(gss22$polviews)
+
+# fit the baseline model
+base_modl <- vglm(as.factor(polviews) ~
+                   relevel(as.factor(natcrime), ref = "2") +
+                   relevel(as.factor(natdrug), ref = "2") +
+                   relevel(as.factor(natheal), ref = "2") +
+                   relevel(as.factor(natenvir), ref = "2"),
+                 family = multinomial(ref = "4"),
+                 data = gss22)
+
+summary(base_modl)
+# calculate the odds ration for extremely liberal versus moderate for 8 
+# possible combonation groups: not enough vs about right and too much vs about right
+# use R to automate the odds ratio calculation
+exp(coef(base_modl))
+
+# locate the highest odds ration among the 8 groups for group 1 and 4
+```
+
+Which group of the respondents is most likely to have extremely conservative political views?
+
+```{r 11}
+table(gss22$polviews)
+
+# fit the baseline model
+base_modc <- vglm(as.factor(polviews) ~
+                   relevel(as.factor(natcrime), ref = "2") +
+                   relevel(as.factor(natdrug), ref = "2") +
+                   relevel(as.factor(natheal), ref = "2") +
+                   relevel(as.factor(natenvir), ref = "2"),
+                 family = multinomial(ref = "4"),
+                 data = gss22)
+
+summary(base_modc)
+# calculate the odds ration for extremely liberal versus moderate for 8 
+# possible combonation groups: not enough vs about right and too much vs about right
+# use R to automate the odds ratio calculation
+exp(coef(base_modc))
+
+# locate the highest odds ratio among the 8 groups for group 7 and 4
+```
+
+Create a new variable by combining extremely liberal and liberal into liberal, slightly liberal, moderate, middle of road and slightly conservative, as moderate, and finally conservative and extremely conservative into conservative.
+
+``` {r 12}
+gss22_3 <- gss22 %>%
+  mutate(polviews = case_when(
+    polviews %in% c(1, 2) ~ "liberal",  
+    polviews %in% c(3, 4, 5) ~ "moderate",
+    polviews %in% c(6, 7) ~ "conservative")) %>%
+  filter(polviews != "NA")
+```
+
+Calculate the odds of a respondent being a liberal versus a moderate if they think we are spending too much money on improving and protecting the environment.
+
+Calculate the odds of a respondent being a conservative versus a moderate if they think we are spending too much money on halting the rising crime rate.
+
+```{r odds}
+# fit the baseline model
+base_modl2 <- vglm(polviews ~
+                   as.factor(natcrime), ref = "liberal" +
+                   as.factor(natenvir), ref = "liberal",
+                 family = multinomial(ref = "moderate"),
+                 data = gss22_3)
+
+summary(base_modl2)
+exp(coef(base_modl2))
+
+# fit the baseline model
+base_modc2 <- vglm(polviews ~
+                   as.factor(natcrime), ref = "conservative" +
+                   as.factor(natenvir), ref = "conservative",
+                 family = multinomial(ref = "moderate"),
+                 data = gss22_3)
+
+summary(base_modc2)
+exp(coef(base_modc2))
+```
