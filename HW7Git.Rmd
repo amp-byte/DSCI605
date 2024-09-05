@@ -3,9 +3,9 @@ title: "HW7_S24_Pops_Adrianna"
 author: "Adrianna Pops"
 date: "2024-02-20"
 output:
-  word_document: default
   html_document:
     df_print: paged
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
